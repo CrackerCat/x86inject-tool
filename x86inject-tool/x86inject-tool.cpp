@@ -1,17 +1,16 @@
 #include "pch.h"
-
-using namespace System;
-using namespace System::Windows::Forms;
-
 #include "frmMain.h"
 
+#ifndef _DEBUG
+// https://docs.microsoft.com/en-us/cpp/build/reference/entry-entry-point-symbol
+#pragma comment( linker, "/subsystem:windows /entry:main" )
+#endif
 
-#include <filesystem>
 
 int main(array<System::String ^> ^args)
 {
-    Application::EnableVisualStyles();
-    Application::Run(gcnew x86injecttool::frmMain());
+    x86injecttool::Application::EnableVisualStyles();
+    x86injecttool::Application::Run(gcnew x86injecttool::frmMain());
 
     return 0;
 }
