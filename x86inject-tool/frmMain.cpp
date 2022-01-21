@@ -1,17 +1,24 @@
 
-#include "frmMain.h"
-
-#include "frmProcesses.h"
-
-#include "ProcessHelper.h"
-
-
+// https://github.com/x64dbg/asmjit_xedparse
 #include <XEDParse/XEDParse.h>
 #ifndef _WIN64
 #pragma comment(lib, "../third_party/XEDParse/XEDParse_x86.lib")
 #else
 #pragma comment(lib, "../third_party/XEDParse/XEDParse_x64.lib")
 #endif
+
+
+// https://github.com/DarthTon/Blackbone
+#include <BlackBone/Process/Process.h>
+#include <BlackBone/Process/RPC/RemoteFunction.hpp>
+
+
+#include "frmMain.h"
+
+#include "frmProcesses.h"
+
+#include "ProcessHelper.h"
+
 
 
 namespace x86injecttool {
@@ -63,13 +70,31 @@ namespace x86injecttool {
 
 
 	inline System::Void frmMain::m_btn_inject_Click(System::Object^ sender, System::EventArgs^ e) {
-		
+
 		if (0 == target_process().id) {
 			return;
 		}
 
 		//
-		ptr_t codeAddr = 0;
+		m_txt_allocAddr->Text = ""; m_txt_retValue->Text = "";
+
+		//
+		blackbone::Process proc;
+		NTSTATUS ntStatus = proc.Attach(target_process().id);
+		if (!NT_SUCCESS(ntStatus)) {
+			MessageBox::Show(String::Format("{0} attach failed", target_process().name), "error", MessageBoxButtons::OK, MessageBoxIcon::Error);
+			return;
+		}
+
+		// 
+		auto memBlock = proc.memory().Allocate(4096, PAGE_EXECUTE_READWRITE, 0, false);
+		if (!memBlock.success()) {
+			MessageBox::Show(String::Format("allocate failed"), "error", MessageBoxButtons::OK, MessageBoxIcon::Error);
+			return;
+		}
+
+		//
+		ptr_t codeAddr = memBlock->ptr();
 
 		
 		if (0 == codeAddr) return;
@@ -99,10 +124,24 @@ namespace x86injecttool {
 			asmValues->Add(asmCode);
 		}
 
+		// 
+		uint32_t iCount = 0;
+		for each (auto asmValue in asmValues)
+		{
+			for each (auto c in asmValue)
+			{
+				memBlock->Write(iCount, c); ++iCount;
+			}
+		}
 
 		// 
 		if (m_chk_exec->Checked) {
+			auto fnProcesser = blackbone::MakeRemoteFunction<void(*)(void)>(proc, codeAddr);
+			ptr_t r = fnProcesser().result();
+			memBlock->Free();
 
+			//
+			m_txt_retValue->Text = String::Format("{0:X16}", r);
 		}
 
 		return;

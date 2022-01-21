@@ -52,6 +52,9 @@ namespace x86injecttool {
 	private: System::Windows::Forms::Label^ label3;
 	private: System::Windows::Forms::TextBox^ m_txt_processid;
 	private: System::Windows::Forms::TextBox^ m_txt_processname;
+	private: System::Windows::Forms::Label^ label4;
+	private: System::Windows::Forms::TextBox^ m_txt_retValue;
+
 
 
 
@@ -81,6 +84,8 @@ namespace x86injecttool {
 			this->label3 = (gcnew System::Windows::Forms::Label());
 			this->m_txt_processid = (gcnew System::Windows::Forms::TextBox());
 			this->m_txt_processname = (gcnew System::Windows::Forms::TextBox());
+			this->label4 = (gcnew System::Windows::Forms::Label());
+			this->m_txt_retValue = (gcnew System::Windows::Forms::TextBox());
 			this->SuspendLayout();
 			// 
 			// m_btn_processes
@@ -127,7 +132,7 @@ namespace x86injecttool {
 			// 
 			// m_txt_allocAddr
 			// 
-			this->m_txt_allocAddr->Location = System::Drawing::Point(658, 681);
+			this->m_txt_allocAddr->Location = System::Drawing::Point(658, 606);
 			this->m_txt_allocAddr->Name = L"m_txt_allocAddr";
 			this->m_txt_allocAddr->ReadOnly = true;
 			this->m_txt_allocAddr->Size = System::Drawing::Size(179, 25);
@@ -136,11 +141,11 @@ namespace x86injecttool {
 			// label1
 			// 
 			this->label1->AutoSize = true;
-			this->label1->Location = System::Drawing::Point(658, 652);
+			this->label1->Location = System::Drawing::Point(658, 577);
 			this->label1->Name = L"label1";
-			this->label1->Size = System::Drawing::Size(135, 15);
+			this->label1->Size = System::Drawing::Size(127, 15);
 			this->label1->TabIndex = 6;
-			this->label1->Text = L"Allocated Addr :";
+			this->label1->Text = L"Allocate Addr :";
 			// 
 			// label2
 			// 
@@ -180,11 +185,30 @@ namespace x86injecttool {
 			this->m_txt_processname->TabIndex = 10;
 			this->m_txt_processname->TabStop = false;
 			// 
+			// label4
+			// 
+			this->label4->AutoSize = true;
+			this->label4->Location = System::Drawing::Point(658, 654);
+			this->label4->Name = L"label4";
+			this->label4->Size = System::Drawing::Size(119, 15);
+			this->label4->TabIndex = 12;
+			this->label4->Text = L"Result Value :";
+			// 
+			// m_txt_retValue
+			// 
+			this->m_txt_retValue->Location = System::Drawing::Point(658, 681);
+			this->m_txt_retValue->Name = L"m_txt_retValue";
+			this->m_txt_retValue->ReadOnly = true;
+			this->m_txt_retValue->Size = System::Drawing::Size(179, 25);
+			this->m_txt_retValue->TabIndex = 11;
+			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(8, 15);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(849, 730);
+			this->Controls->Add(this->label4);
+			this->Controls->Add(this->m_txt_retValue);
 			this->Controls->Add(this->m_txt_processname);
 			this->Controls->Add(this->m_txt_processid);
 			this->Controls->Add(this->label3);
