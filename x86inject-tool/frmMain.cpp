@@ -1,4 +1,6 @@
 
+#define NOMINMAX
+
 // https://github.com/x64dbg/asmjit_xedparse
 #include <XEDParse/XEDParse.h>
 #ifndef _WIN64
@@ -11,6 +13,10 @@
 // https://github.com/DarthTon/Blackbone
 #include <BlackBone/Process/Process.h>
 #include <BlackBone/Process/RPC/RemoteFunction.hpp>
+
+// https://github.com/google/re2
+#include <re2/re2.h>
+#pragma comment(lib, "../third_party/re2/out/build/x64-Release/re2.lib")
 
 
 #include "frmMain.h"
@@ -25,6 +31,7 @@ namespace x86injecttool {
 
 	using namespace System::IO;
 	using namespace System::Diagnostics;
+	using namespace System::Text::RegularExpressions;
 
 	public ref struct clsAssembleJit
 	{
@@ -65,7 +72,7 @@ namespace x86injecttool {
 
 	inline System::Void frmMain::frmMain_Load(System::Object^ sender, System::EventArgs^ e) {
 
-
+		return;
 	}
 
 
@@ -78,6 +85,53 @@ namespace x86injecttool {
 		//
 		m_txt_allocAddr->Text = ""; m_txt_retValue->Text = "";
 
+
+		// 
+		List<String^>^ asmCodes = gcnew List<String^>();
+
+		// 
+		StringReader reader(m_txt_assembler->Text);
+		while (1) {
+			String^ s = reader.ReadLine();
+			if (nullptr == s) break;
+			if (s->Length > 1) asmCodes->Add(s);
+		}
+
+		if (0 == asmCodes->Count) return;
+
+		// 
+		for each (auto var in asmCodes) {
+			marshal_context^ context = gcnew marshal_context();
+
+			std::string l = context->marshal_as<const char*>(var);
+
+			//
+			re2::StringPiece group;
+
+			// remarks
+			RE2::PartialMatch(l, "(//.*)", &group);
+			RE2::Replace(&l, "(//.*)", std::string("\00", group.size()));
+
+
+			// strings
+			RE2::PartialMatch(l, "(\".*\")|(L\".*\")|(u8\".*\")", &group);
+
+			if (group.starts_with("\"")) {
+
+			}
+
+			if (group.starts_with("L\"")) {
+
+			}
+
+			if (group.starts_with("u8\"")) {
+			
+			}
+
+			return;
+		}
+
+
 		//
 		blackbone::Process proc;
 		NTSTATUS ntStatus = proc.Attach(target_process().id);
@@ -85,6 +139,7 @@ namespace x86injecttool {
 			MessageBox::Show(String::Format("{0} attach failed", target_process().name), "error", MessageBoxButtons::OK, MessageBoxIcon::Error);
 			return;
 		}
+
 
 		// 
 		auto memBlock = proc.memory().Allocate(4096, PAGE_EXECUTE_READWRITE, 0, false);
@@ -95,23 +150,11 @@ namespace x86injecttool {
 
 		//
 		ptr_t codeAddr = memBlock->ptr();
-
-		
 		if (0 == codeAddr) return;
-		m_txt_allocAddr->Text = String::Format("{0:X16}", codeAddr);
 
 
-		// 
-		List<String^>^ asmCodes = gcnew List<String^>();
+		//
 		List<array<Byte>^>^ asmValues = gcnew List<array<Byte>^>();
-
-		// 
-		StringReader reader(m_txt_assembler->Text);
-		while (1) {
-			String^ s = reader.ReadLine();
-			if (nullptr == s) break;
-			if (s->Length > 1) asmCodes->Add(s);
-		}
 
 		// 
 		clsAssembleJit asmJit;
@@ -119,6 +162,9 @@ namespace x86injecttool {
 			array<Byte>^ asmCode = asmJit.assembler(asmCodes[i], UIntPtr(codeAddr), target_process().is64);
 			if (!asmCode->Length) {
 				MessageBox::Show(String::Format("line {0}: {1}", i + 1, asmJit.last_error), "error", MessageBoxButtons::OK, MessageBoxIcon::Error);
+
+				memBlock->Free();
+
 				return;
 			}
 			asmValues->Add(asmCode);
@@ -126,23 +172,28 @@ namespace x86injecttool {
 
 		// 
 		uint32_t iCount = 0;
-		for each (auto asmValue in asmValues)
-		{
-			for each (auto c in asmValue)
-			{
+		for each (auto asmValue in asmValues) {
+			for each (auto c in asmValue) {
 				memBlock->Write(iCount, c); ++iCount;
 			}
 		}
 
-		// 
-		if (m_chk_exec->Checked) {
-			auto fnProcesser = blackbone::MakeRemoteFunction<void(*)(void)>(proc, codeAddr);
-			ptr_t r = fnProcesser().result();
-			memBlock->Free();
+		//
+		m_txt_allocAddr->Text = String::Format("{0:X16}", codeAddr);
 
-			//
-			m_txt_retValue->Text = String::Format("{0:X16}", r);
-		}
+
+		// 
+		if (!m_chk_exec->Checked) return;
+
+		//
+		auto fnProcesser = blackbone::MakeRemoteFunction<void(*)(void)>(proc, codeAddr);
+		ptr_t r = fnProcesser().result();
+
+		//
+		m_txt_retValue->Text = String::Format("{0:X16}", r);
+
+
+		memBlock->Free();
 
 		return;
 	}
