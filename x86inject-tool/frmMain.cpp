@@ -14,9 +14,6 @@
 #include <BlackBone/Process/Process.h>
 #include <BlackBone/Process/RPC/RemoteFunction.hpp>
 
-// https://github.com/google/re2
-#include <re2/re2.h>
-#pragma comment(lib, "../third_party/re2/out/build/x64-Release/re2.lib")
 
 
 #include "frmMain.h"
@@ -96,40 +93,9 @@ namespace x86injecttool {
 			if (nullptr == s) break;
 			if (s->Length > 1) asmCodes->Add(s);
 		}
-
+		
+		//
 		if (0 == asmCodes->Count) return;
-
-		// 
-		for each (auto var in asmCodes) {
-			marshal_context^ context = gcnew marshal_context();
-
-			std::string l = context->marshal_as<const char*>(var);
-
-			//
-			re2::StringPiece group;
-
-			// remarks
-			RE2::PartialMatch(l, "(//.*)", &group);
-			RE2::Replace(&l, "(//.*)", std::string("\00", group.size()));
-
-
-			// strings
-			RE2::PartialMatch(l, "(\".*\")|(L\".*\")|(u8\".*\")", &group);
-
-			if (group.starts_with("\"")) {
-
-			}
-
-			if (group.starts_with("L\"")) {
-
-			}
-
-			if (group.starts_with("u8\"")) {
-			
-			}
-
-			return;
-		}
 
 
 		//
@@ -142,15 +108,16 @@ namespace x86injecttool {
 
 
 		// 
-		auto memBlock = proc.memory().Allocate(4096, PAGE_EXECUTE_READWRITE, 0, false);
-		if (!memBlock.success()) {
+		auto stringsBlock = proc.memory().Allocate(4096, PAGE_READWRITE, 0, false);
+		auto codeBlock = proc.memory().Allocate(4096, PAGE_EXECUTE_READWRITE, 0, false);
+		if (!codeBlock.success() || !stringsBlock.success()) {
 			MessageBox::Show(String::Format("allocate failed"), "error", MessageBoxButtons::OK, MessageBoxIcon::Error);
 			return;
 		}
 
 		//
-		ptr_t codeAddr = memBlock->ptr();
-		if (0 == codeAddr) return;
+		ptr_t stringsAddr = stringsBlock->ptr(); ptr_t stringsOffset = 0;
+		ptr_t codeAddr = codeBlock->ptr();  ptr_t retValue = 0;
 
 
 		//
@@ -159,13 +126,49 @@ namespace x86injecttool {
 		// 
 		clsAssembleJit asmJit;
 		for (int i = 0; i < asmCodes->Count; i++) {
-			array<Byte>^ asmCode = asmJit.assembler(asmCodes[i], UIntPtr(codeAddr), target_process().is64);
+			String^ asmContent = asmCodes[i];
+			{
+				array<Byte>^ arrbytes = nullptr;
+				System::Text::Encoding^ coder = System::Text::Encoding::Default;
+
+				// https://docs.microsoft.com/zh-cn/cpp/c-language/c-comments 
+				// ( "/* */" or "//" )
+				asmContent = Regex::Replace(asmContent, "(/\\*.*\\*/)|(//.*)", String::Empty);
+
+				// https://docs.microsoft.com/zh-cn/cpp/c-language/c-string-literals
+				// https://zh.cppreference.com/w/cpp/language/string_literal
+				// ( "" or L"" or u8"" )
+				String^ ss = Regex::Match(asmContent, "[\"|L\"|u8\"].*\"")->Value;
+
+				if (ss->StartsWith("\"")) {
+					coder = System::Text::Encoding::Default;
+					arrbytes = coder->GetBytes(ss->Substring(1, ss->Length - 2));
+				}
+				if (ss->StartsWith("L\"")) {
+					auto coder = System::Text::Encoding::Unicode;
+					arrbytes = coder->GetBytes(ss->Substring(2, ss->Length - 3));
+				}
+				if (ss->StartsWith("u8\"")) {
+					auto coder = System::Text::Encoding::UTF8;
+					arrbytes = coder->GetBytes(ss->Substring(3, ss->Length - 4));
+				}
+
+				if (arrbytes) {
+					//
+					IntPtr pptr = Marshal::AllocCoTaskMem(arrbytes->Length);
+					Marshal::Copy(arrbytes, 0, pptr, arrbytes->Length);
+					stringsBlock->Write(stringsOffset, arrbytes->Length, pptr.ToPointer());
+					Marshal::FreeCoTaskMem(pptr);
+					//
+					asmContent = asmContent->Replace(ss, String::Format("0x{0:X}", stringsAddr + stringsOffset));
+					stringsOffset += arrbytes->Length; stringsOffset += 4;
+				}
+			}
+
+			array<Byte>^ asmCode = asmJit.assembler(asmContent, UIntPtr(codeAddr), target_process().is64);
 			if (!asmCode->Length) {
 				MessageBox::Show(String::Format("line {0}: {1}", i + 1, asmJit.last_error), "error", MessageBoxButtons::OK, MessageBoxIcon::Error);
-
-				memBlock->Free();
-
-				return;
+				goto _cleanup;
 			}
 			asmValues->Add(asmCode);
 		}
@@ -174,7 +177,7 @@ namespace x86injecttool {
 		uint32_t iCount = 0;
 		for each (auto asmValue in asmValues) {
 			for each (auto c in asmValue) {
-				memBlock->Write(iCount, c); ++iCount;
+				codeBlock->Write(iCount, c); ++iCount;
 			}
 		}
 
@@ -186,15 +189,17 @@ namespace x86injecttool {
 		if (!m_chk_exec->Checked) return;
 
 		//
-		auto fnProcesser = blackbone::MakeRemoteFunction<void(*)(void)>(proc, codeAddr);
-		ptr_t r = fnProcesser().result();
+		{
+			auto fnProcesser = blackbone::MakeRemoteFunction<void(*)(void)>(proc, codeAddr);
+			retValue = fnProcesser().result();
+		}
 
 		//
-		m_txt_retValue->Text = String::Format("{0:X16}", r);
+		m_txt_retValue->Text = String::Format("{0:X16}", retValue);
 
 
-		memBlock->Free();
-
+	_cleanup:
+		stringsBlock->Free(); codeBlock->Free();
 		return;
 	}
 

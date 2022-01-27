@@ -110,6 +110,8 @@ namespace x86injecttool {
 			// 
 			// m_txt_assembler
 			// 
+			this->m_txt_assembler->Font = (gcnew System::Drawing::Font(L"Î¢ÈíÑÅºÚ", 12, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point,
+				static_cast<System::Byte>(134)));
 			this->m_txt_assembler->Location = System::Drawing::Point(21, 60);
 			this->m_txt_assembler->Name = L"m_txt_assembler";
 			this->m_txt_assembler->ScrollBars = System::Windows::Forms::RichTextBoxScrollBars::ForcedVertical;
